@@ -1,4 +1,7 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
+const OfficeScene = lazy(() => import('./OfficeScene'))
+import type { Member, MemberStatus } from './teamData'
+import './office.css'
 import {
   Activity, AlertCircle, ArrowDownRight, ArrowRight, ArrowUpRight,
   Bot, Check, CheckCircle2, ChevronDown, Circle, Clock3, Command,
@@ -8,8 +11,6 @@ import {
 } from 'lucide-react'
 import './App.css'
 
-type MemberStatus = 'Working' | 'Reviewing' | 'Idle' | 'Done'
-type Member = { id: string; name: string; role: string; initials: string; color: string; status: MemberStatus; task: string; progress: number; model: string; branch: string; lastActive: string }
 type Task = { id: string; title: string; owner: string; status: 'In progress' | 'In review' | 'Done' | 'Todo'; priority: 'High' | 'Medium' | 'Low'; time: string }
 type FeedItem = { id: string; member: string; action: string; target: string; time: string; kind: 'commit' | 'review' | 'task' | 'message'; color: string }
 
@@ -44,7 +45,7 @@ const feed: FeedItem[] = [
   { id: 'f9', member: 'support-dev', action: 'reviewed', target: 'SelectionManager · peer verdict OK', time: '10:34:16', kind: 'review', color: 'pink' },
 ]
 
-const statusClass: Record<MemberStatus, string> = { Working: 'working', Reviewing: 'reviewing', Idle: 'idle', Done: 'done' }
+const statusClass: Record<MemberStatus, string> = { Working: 'working', Reviewing: 'reviewing', Idle: 'idle', Done: 'done', Delivering: 'delivering' }
 const taskStatusClass: Record<Task['status'], string> = { 'In progress': 'progress', 'In review': 'review', Done: 'complete', Todo: 'todo' }
 
 function App() {
@@ -56,6 +57,7 @@ function App() {
   const [showAll, setShowAll] = useState(false)
   const [isLive, setIsLive] = useState(true)
   const [toast, setToast] = useState('')
+  const [currentView, setCurrentView] = useState<'overview' | 'office'>('office')
   const selected = members.find((member) => member.id === selectedMember)
 
   const filteredFeed = useMemo(() => feed.filter((item) => {
@@ -73,6 +75,15 @@ function App() {
     setMembers((current) => current.map((member) => member.id === id ? { ...member, status: member.status === 'Idle' ? 'Working' : 'Idle', lastActive: 'Just now' } : member))
   }
 
+  const cycleMemberStatus = (id: string) => {
+    const sequence: MemberStatus[] = ['Working', 'Delivering', 'Reviewing', 'Idle']
+    setMembers((current) => current.map((member) => {
+      if (member.id !== id) return member
+      const next = sequence[(sequence.indexOf(member.status) + 1) % sequence.length]
+      return { ...member, status: next, lastActive: 'Just now' }
+    }))
+  }
+
   const doneCount = tasks.filter((task) => task.status === 'Done').length
   const activeCount = members.filter((member) => member.status === 'Working' || member.status === 'Reviewing').length
 
@@ -83,7 +94,8 @@ function App() {
         <div className="workspace-switch"><div className="workspace-icon">TS</div><div className="workspace-copy"><strong>TinySword Studio</strong><span>Personal workspace</span></div><ChevronDown size={15} /></div>
         <div className="sidebar-label">WORKSPACE</div>
         <nav className="nav-list">
-          <button className="nav-item active"><LayoutDashboard size={17} /><span>Overview</span><span className="nav-shortcut">⌘ 1</span></button>
+          <button className={`nav-item ${currentView === 'overview' ? 'active' : ''}`} onClick={() => setCurrentView('overview')}><LayoutDashboard size={17} /><span>Overview</span><span className="nav-shortcut">⌘ 1</span></button>
+          <button className={`nav-item ${currentView === 'office' ? 'active' : ''}`} onClick={() => setCurrentView('office')}><Bot size={17} /><span>3D Office</span><span className="nav-count">{members.length}</span></button>
           <button className="nav-item" onClick={() => notify('Task board is shown in the overview')}><ListTodo size={17} /><span>Task board</span><span className="nav-count">8</span></button>
           <button className="nav-item" onClick={() => notify('Activity feed is shown in the overview')}><Activity size={17} /><span>Activity</span></button>
           <button className="nav-item" onClick={() => notify('Members are listed below')}><Users size={17} /><span>Members</span><span className="nav-count">5</span></button>
@@ -99,6 +111,12 @@ function App() {
         <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>Overview</strong></div><div className="top-actions"><div className="branch-pill"><GitBranch size={14} /><span>feature/phase4-ui</span><ChevronDown size={13} /></div><button className="icon-button" title="Search" onClick={() => document.getElementById('activity-search')?.focus()}><Search size={17} /></button><button className="help-button" onClick={() => notify('Demo dashboard · data is illustrative')}>?</button><div className="top-avatar">TN</div></div></header>
 
         <div className="page-content">
+          {currentView === 'office' ? <>
+            <section className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-line" /> AGENT OPERATIONS FLOOR</div><h1>Your team, in motion <span className="wave">✳</span></h1><p className="page-subtitle">Watch agents work, collaborate, and deliver tasks in their shared office.</p></div><div className="office-header-actions"><span className="demo-state-label"><span className="live-dot" /> DEMO SCENE</span><button className="primary-button" onClick={() => { const next = members.find(member => member.status !== 'Delivering'); if (next) { cycleMemberStatus(next.id); notify(`${next.name} is heading to deliver a task`) } }}><Play size={14} fill="currentColor" /> Simulate delivery</button></div></section>
+            <section className="office-toolbar"><div className="office-legend"><span><i className="legend-working"/>Working</span><span><i className="legend-review"/>Reviewing</span><span><i className="legend-delivering"/>Delivering</span><span><i className="legend-idle"/>Idle / done</span></div><div className="office-toolbar-note"><span>Drag to orbit</span><span className="toolbar-separator">·</span><span>Scroll to zoom</span><button onClick={() => setMembers(current => current.map(member => member.status === 'Delivering' ? { ...member, status: 'Working' } : member))}>Reset scene</button></div></section>
+            <section className="office-layout"><div className="office-stage"><Suspense fallback={<div className="scene-loading"><span className="loading-orbit"/>Loading 3D office…</div>}><OfficeScene members={members} selectedId={selectedMember} onSelectMember={setSelectedMember}/></Suspense><div className="scene-caption"><span><span className="scene-caption-dot"/> FLOOR 01</span><span>5 WORKSTATIONS · INTERACTIVE SCENE</span></div></div><aside className="office-roster"><div className="roster-heading"><div><h3>Team floor</h3><p>{members.length} dedicated workstations</p></div><span className="roster-live"><Radio size={13}/> LIVE</span></div>{members.map(member => <div key={member.id} className={`roster-card ${selectedMember === member.id ? 'roster-selected' : ''}`}><button className="roster-main" onClick={() => setSelectedMember(member.id)}><span className={`avatar avatar-${member.color}`}>{member.initials}</span><span className="roster-info"><strong>{member.name}</strong><small>{member.task}</small></span><span className={`status-pill status-${statusClass[member.status]}`}><i/>{member.status}</span></button><div className="roster-meta"><span><Bot size={11}/>{member.model}</span><span><GitBranch size={11}/>{member.branch}</span></div><div className="roster-actions"><span className="roster-last-active"><Clock3 size={11}/>{member.lastActive}</span><button onClick={() => cycleMemberStatus(member.id)} title="Cycle demo member state"><Activity size={12}/> Change state</button></div></div>)}<div className="office-note"><Sparkles size={14}/><span>Scene uses sample data. Switch an agent to <b>Delivering</b> to see them walk around the floor.</span></div></aside></section>
+            <footer className="page-footer"><span><span className="footer-status"/> Scene rendering locally</span><span>Orbit controls enabled · Click a workstation to select</span><span>Data source: demo <Sparkles size={12}/></span></footer>
+          </> : <>
           <section className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-line" /> TEAM CONTROL CENTER</div><h1>Good morning, Tien <span className="wave">✳</span></h1><p className="page-subtitle">Here’s what your agents are working on today.</p></div><button className="primary-button" onClick={() => notify('Demo mode: new task creation is disabled')}><Plus size={16} /> New task</button></section>
 
           <section className="stat-grid" aria-label="Team summary">
@@ -124,6 +142,7 @@ function App() {
             <div className="panel detail-panel"><div className="panel-header"><div><h3>Member details</h3><p>{selected ? 'Selected agent profile' : 'Choose a member to inspect'}</p></div><button className="subtle-icon" onClick={() => setSelectedMember(null)} title="Clear selection"><X size={15} /></button></div>{selected ? <><div className="detail-person"><span className={`avatar avatar-xl avatar-${selected.color}`}>{selected.initials}</span><div><h4>{selected.name}</h4><span>{selected.role}</span></div><span className={`status-pill status-${statusClass[selected.status]}`}><i />{selected.status}</span></div><div className="detail-current"><span className="detail-label">CURRENT TASK</span><strong>{selected.task}</strong><div className="detail-progress"><span style={{ width: `${selected.progress}%` }} /></div><div className="progress-meta"><span>{selected.progress}% complete</span><span>{selected.status === 'Done' ? 'Completed' : 'Updated ' + selected.lastActive}</span></div></div><div className="detail-meta"><div><span>MODEL</span><strong><Bot size={13} /> {selected.model}</strong></div><div><span>BRANCH</span><strong><GitBranch size={13} /> {selected.branch}</strong></div></div><div className="detail-actions"><button onClick={() => notify(`Opening ${selected.name} activity`)}><Activity size={14} /> View activity</button><button className="more-action" title={selected.status === 'Idle' ? 'Activate member' : 'Pause member'} onClick={() => toggleMember(selected.id)}>{selected.status === 'Idle' ? <Play size={14} /> : <Circle size={14} />}</button></div></> : <div className="detail-empty"><Users size={24} /><span>Select a team member to see their current task, model and branch.</span></div>}</div></section>
 
           <footer className="page-footer"><span><span className="footer-status" /> All systems operational</span><span>Demo data · Last synced just now</span><span>Built for agent teams <Sparkles size={12} /></span></footer>
+          </>}
         </div>
       </main>
       {toast && <div className="toast"><AlertCircle size={16} />{toast}<button onClick={() => setToast('')}><X size={14} /></button></div>}
