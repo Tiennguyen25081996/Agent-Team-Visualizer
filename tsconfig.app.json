@@ -4,7 +4,7 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    "types": ["vite/client", "@deepseek-ai/dsh-experimental-agent-team/client", "@deepseek-ai/dsh-client-ui-conversation/client", "@deepseek-ai/dsh-client-ui-session/client", "@deepseek-ai/dsh-client-ui-renderer/client"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
