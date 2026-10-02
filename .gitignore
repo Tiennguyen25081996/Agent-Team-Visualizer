@@ -26,3 +26,6 @@ dist-ssr
 .env.*
 !.env.example
 .vite/
+
+# DSH plugin installable bundle (kept out of dist/ which vite build empties)
+dist-dsh
