@@ -5,6 +5,8 @@ A local-first web dashboard prototype for visualizing Agent Team activity. The c
 ## MVP scope
 
 - Team member presence, role, current task, model, branch and progress
+- Interactive 3D office with one desk/chair workstation per member; agents type while working/reviewing and walk around carrying a task card while delivering
+- Demo controls to change member state, select a workstation, orbit and zoom the scene
 - Activity feed with search and category filters
 - Sprint task board and selected-member detail panel
 - Responsive dark operations-console layout
@@ -12,7 +14,7 @@ A local-first web dashboard prototype for visualizing Agent Team activity. The c
 
 ## Out of scope for this prototype
 
-- Live DSH/Agent Teams event ingestion
+- Live DSH/Agent Teams event ingestion (scene animation currently uses mock status data)
 - Authentication, persistence, invitations or task mutations
 - Unity/game integration
 
