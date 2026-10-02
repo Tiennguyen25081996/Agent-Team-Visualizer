@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { ContactShadows, Environment, Html, OrbitControls, RoundedBox, Text } from '@react-three/drei'
+import { ContactShadows, Html, OrbitControls, RoundedBox } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { Member } from './teamData'
@@ -97,7 +97,7 @@ function DeskStation({ member, index, selected, onSelectMember }: { member: Memb
     <Html position={[0,2.1,0]} center distanceFactor={8} style={{ pointerEvents:'none' }}>
       <div className={`office-tag ${selected ? 'office-tag-selected' : ''}`}><span className={`office-tag-dot office-${member.status.toLowerCase()}`} />{member.name}<small>{member.status === 'Delivering' ? 'DELIVERING' : member.status.toUpperCase()}</small></div>
     </Html>
-    <Text position={[0,0.02,1.05]} rotation={[-Math.PI/2,0,0]} fontSize={0.12} color="#a7a2b3" anchorX="center" anchorY="middle">{member.name}</Text>
+    <Html position={[0,0.08,1.05]} center distanceFactor={8} style={{ pointerEvents:'none' }}><div className="desk-nameplate">{member.name}</div></Html>
   </group>
 }
 
@@ -114,15 +114,13 @@ function OfficeRoom({ members, selectedId, onSelectMember }: OfficeSceneProps) {
     <gridHelper args={[12,24,'#3a3e49','#282c34']} position={[0,-0.06,0]} />
     <mesh position={[0,1.8,-4.95]}><boxGeometry args={[12,3.8,0.15]} /><meshStandardMaterial color="#24232e" roughness={0.9} /></mesh>
     <mesh position={[0,1.92,-4.85]}><boxGeometry args={[6.4,1.45,0.03]} /><meshStandardMaterial color="#181a22" emissive="#292446" emissiveIntensity={0.6} /></mesh>
-    <Text position={[0,2.1,-4.81]} fontSize={0.26} color="#c5b6ff" anchorX="center" anchorY="middle" font="https://fonts.gstatic.com/s/dmsans/v17/rP2Hp2ywxg089UriCZOIHTWEBl0.woff2">AGENT OPERATIONS</Text>
-    <Text position={[0,1.78,-4.81]} fontSize={0.11} color="#797e91" anchorX="center" anchorY="middle">TEAM FLOOR · LIVE WORKSPACE</Text>
+    <Html position={[0,2.04,-4.78]} center distanceFactor={8} style={{ pointerEvents:'none' }}><div className="room-sign"><strong>AGENT OPERATIONS</strong><small>TEAM FLOOR · LIVE WORKSPACE</small></div></Html>
     {members.map((member,index)=><DeskStation key={member.id} member={member} index={index} selected={member.id===selectedId} onSelectMember={onSelectMember} />)}
     <ContactShadows position={[0,-0.055,0]} opacity={0.4} scale={14} blur={2.5} far={4} />
-    <Environment preset="city" />
     <OrbitControls makeDefault minDistance={7} maxDistance={15} maxPolarAngle={Math.PI/2.05} target={[0,0.65,0]} />
   </>
 }
 
 export default function OfficeScene(props: OfficeSceneProps) {
-  return <div className="office-canvas"><Canvas shadows camera={{ position:[8,8,11], fov:43 }} dpr={[1,1.7]}><OfficeRoom {...props} /></Canvas></div>
+  return <div className="office-canvas"><Canvas shadows camera={{ position:[8,8,11], fov:43 }} dpr={[1,1.7]} gl={{ antialias:true, alpha:false, powerPreference:'high-performance' }} onCreated={({ gl }) => { gl.setClearColor('#11151b', 1) }} fallback={<div className="scene-error-card"><strong>WebGL không được trình duyệt hỗ trợ</strong><span>Hãy bật tăng tốc phần cứng/WebGL rồi tải lại trang.</span></div>}><OfficeRoom {...props} /></Canvas></div>
 }
