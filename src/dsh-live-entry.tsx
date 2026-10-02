@@ -29,9 +29,22 @@ function LiveDesk({member,index,selected,onSelect,canWander,ambientPaused,column
   const x=(index%columns-(columns-1)/2)*spacingX
   const z=(Math.floor(index/columns)-(rows-1)/2)*spacingZ
   const body=React.useRef<Group>(null)
+  const expressionRef=useRef<HTMLSpanElement>(null)
   const memberHash=Array.from(member.id).reduce((hash,char)=>Math.imul(hash,31)+char.charCodeAt(0)|0,0)>>>0
+  const expressionSeed=memberHash%5
+  const expressions=['🙂','😎','🤔','😄','😴']
+  const lastExpressionPhase=useRef(-1)
   const walkPhase=(memberHash*0.0001)%(Math.PI*2)
   useFrame(({clock})=>{
+    if (ambientPaused) {
+      lastExpressionPhase.current=-1
+    } else if (expressionRef.current) {
+      const phase=(Math.floor(clock.elapsedTime/7)+expressionSeed)%expressions.length
+      if (phase!==lastExpressionPhase.current) {
+        expressionRef.current.textContent=expressions[phase]
+        lastExpressionPhase.current=phase
+      }
+    }
     if (!body.current) return
     if (!canWander) {
       body.current.position.set(0,1.03+Math.sin(clock.elapsedTime*3+index)*0.025,.43)
@@ -44,10 +57,12 @@ function LiveDesk({member,index,selected,onSelect,canWander,ambientPaused,column
       const cycle=((clock.elapsedTime+walkPhase*cycleDuration/(Math.PI*2))%cycleDuration+cycleDuration)%cycleDuration
       // Route around the open aisle in front of the desk, not through the desk/chair footprint.
       // The narrow spacing between workstation columns makes a full-width ellipse unsafe.
-      const orbitRadiusX=Math.min(1.15,Math.max(0.55,sceneWidth/2-1.25))
-      const orbitRadiusZ=Math.min(0.45,Math.max(0.2,sceneDepth/2-1.25))
-      const orbitCenterZ=Math.max(-sceneDepth/2+1.25+orbitRadiusZ,Math.min(sceneDepth/2-1.25-orbitRadiusZ,z+1.55))
-      const orbitStartX=x+orbitRadiusX
+      // Keep the complete avatar orbit in the aisle in front of the desk and chair.
+      // Its Z center is offset beyond the desk/chair footprint; X radius stays within the desk's width.
+      const orbitRadiusX=Math.min(0.62,Math.max(0.3,sceneWidth/2-1.25))
+      const orbitRadiusZ=Math.min(0.34,Math.max(0.2,sceneDepth/2-1.25))
+      const orbitCenterZ=Math.max(-sceneDepth/2+1.25+orbitRadiusZ,Math.min(sceneDepth/2-0.2-orbitRadiusZ,z+1.75))
+      const orbitStartX=orbitRadiusX
       const orbitStartZ=orbitCenterZ-z
 
       let targetX=0, targetZ=0, heading=0
@@ -83,7 +98,7 @@ function LiveDesk({member,index,selected,onSelect,canWander,ambientPaused,column
   const colors=['#a78bfa','#60a5fa','#fb923c','#4ade80','#f472b6']
   const accent=colors[index%colors.length]
   const running=member.status==='Working'
-  return <group position={[x,0,z]} onClick={(event)=>{event.stopPropagation();onSelect()}}><RoundedBox args={[1.8,0.13,1.08]} radius={0.06} position={[0,0.91,0]} castShadow><meshStandardMaterial color="#75553e"/></RoundedBox>{[[-.73,.43,-.39],[.73,.43,-.39],[-.73,.43,.39],[.73,.43,.39]].map(([a,b,c],i)=><mesh key={i} position={[a,b,c]} castShadow><boxGeometry args={[.09,.87,.09]}/><meshStandardMaterial color="#443c37"/></mesh>)}<mesh position={[0,.99,.54]}><boxGeometry args={[1.78,.13,.035]}/><meshStandardMaterial color={selected?accent:'#a07655'} emissive={selected?accent:'#000000'} emissiveIntensity={selected?.25:0}/></mesh><mesh position={[0,.78,-.03]}><boxGeometry args={[.53,.035,.36]}/><meshStandardMaterial color="#aeb5c1" metalness={.65}/></mesh><mesh position={[0,.98,-.17]}><boxGeometry args={[.52,.34,.025]}/><meshStandardMaterial color={running?'#164252':'#222532'} emissive={running?'#0f4555':'#000000'} emissiveIntensity={running?.55:0}/></mesh><mesh position={[0,.45,.53]}><boxGeometry args={[.55,.12,.5]}/><meshStandardMaterial color={accent}/></mesh><mesh position={[0,.78,.75]}><boxGeometry args={[.55,.55,.1]}/><meshStandardMaterial color={accent}/></mesh><group ref={body} position={[0,1.03,.43]}><mesh><capsuleGeometry args={[.19,.37,4,8]}/><meshStandardMaterial color={accent}/></mesh><mesh position={[0,.43,.02]}><sphereGeometry args={[.18,20,16]}/><meshStandardMaterial color="#e7b99d"/></mesh></group><Html position={[0,2.1,0]} center distanceFactor={8}><div className={`office-tag ${selected?'office-tag-selected':''}`}><span aria-hidden="true" className={`office-tag-dot ${running?'office-working':'office-idle'}`}/><span>{member.name}</span><small>{member.runtimeLabel}</small></div></Html><mesh position={[0,.2,.53]}><cylinderGeometry args={[.045,.045,.38,12]}/><meshStandardMaterial color="#4c5360"/></mesh></group>
+  return <group position={[x,0,z]} onClick={(event)=>{event.stopPropagation();onSelect()}}><RoundedBox args={[1.8,0.13,1.08]} radius={0.06} position={[0,0.91,0]} castShadow><meshStandardMaterial color="#75553e"/></RoundedBox>{[[-.73,.43,-.39],[.73,.43,-.39],[-.73,.43,.39],[.73,.43,.39]].map(([a,b,c],i)=><mesh key={i} position={[a,b,c]} castShadow><boxGeometry args={[.09,.87,.09]}/><meshStandardMaterial color="#443c37"/></mesh>)}<mesh position={[0,.99,.54]}><boxGeometry args={[1.78,.13,.035]}/><meshStandardMaterial color={selected?accent:'#a07655'} emissive={selected?accent:'#000000'} emissiveIntensity={selected?.25:0}/></mesh><mesh position={[0,.78,-.03]}><boxGeometry args={[.53,.035,.36]}/><meshStandardMaterial color="#aeb5c1" metalness={.65}/></mesh><mesh position={[0,.98,-.17]}><boxGeometry args={[.52,.34,.025]}/><meshStandardMaterial color={running?'#164252':'#222532'} emissive={running?'#0f4555':'#000000'} emissiveIntensity={running?.55:0}/></mesh><mesh position={[0,.45,.53]}><boxGeometry args={[.55,.12,.5]}/><meshStandardMaterial color={accent}/></mesh><mesh position={[0,.78,.75]}><boxGeometry args={[.55,.55,.1]}/><meshStandardMaterial color={accent}/></mesh><group ref={body} position={[0,1.03,.43]}><mesh><capsuleGeometry args={[.19,.37,4,8]}/><meshStandardMaterial color={accent}/></mesh><mesh position={[0,.43,.02]}><sphereGeometry args={[.18,20,16]}/><meshStandardMaterial color="#e7b99d"/></mesh><Html position={[0,.79,0]} center distanceFactor={8}><span ref={expressionRef} className="live-decorative-expression" role="img" aria-label="Decorative ambient expression; not DSH emotion data">🙂</span></Html></group><Html position={[0,2.1,0]} center distanceFactor={8}><div className={`office-tag ${selected?'office-tag-selected':''}`}><span aria-hidden="true" className={`office-tag-dot ${running?'office-working':'office-idle'}`}/><span>{member.name}</span><small>{member.runtimeLabel}</small></div></Html><mesh position={[0,.2,.53]}><cylinderGeometry args={[.045,.045,.38,12]}/><meshStandardMaterial color="#4c5360"/></mesh></group>
 }
 
 function OfficeCameraController({controls,cameraRequest,cancelTransitionRef}:{controls:React.MutableRefObject<any>;cameraRequest:{position:[number,number,number];target:[number,number,number];instant:boolean}|null;cancelTransitionRef:React.MutableRefObject<()=>void>}) {
