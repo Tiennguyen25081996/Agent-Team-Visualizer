@@ -110,6 +110,81 @@ The script fails loudly rather than shipping a bundle the host cannot activate:
 - **`inject` shape** — cordis's `Inject.resolve()` understands only arrays or plain objects; a function export silently resolves to zero services, `apply()` runs with an empty `ctx`, and the entry's fiber is disposed (`<id>: failed` in the web boot audit). The check reads the authored source because the minifier may alias the export.
 - **CSS registration** — Vite emits `client.css` as a sibling nothing loads, so it is inlined and registered as `<style data-dsh-atv-css>` the way official DSH plugins do.
 
+## Modifying the DSH host (and keeping the plugin compatible)
+
+The plugin is a **guest inside the DSH Web runtime**, so a host change and a plugin change are two different operations. Default to the plugin side; touch the host only when the contract itself moves.
+
+### Where the pieces live
+
+| Location | What it is | How to treat it |
+| --- | --- | --- |
+| `~/.npm-global/lib/node_modules/@deepseek-ai/dsh/` | The installed host (`@deepseek-ai/dsh` `0.2.0-rc.2`), minified `lib/*.js` | **Read** it to learn the contract. Never hand-edit minified output |
+| `~/.dsh/profiles/web/` | The `web` profile: `package.json`, `cordis.yml`, `cordis.patch.yml`, `node_modules` | The wiring surface for this plugin |
+| `http://127.0.0.1:3080` | The one running GUI | Verify here after a rebuild. Never start a second server |
+
+### The host contract this plugin depends on
+
+| Host package | Provides | If it changes, do this in this repo |
+| --- | --- | --- |
+| `@deepseek-ai/dsh-client-ui-slots` | Slot registry: `slots.inject` / `register` / `entries` / `subscribe`, `resolveSlotLabel` | Re-check the `register({...})` options in `src/dsh-live-plugin.tsx` |
+| `@deepseek-ai/dsh-client-ui-conversation` | Owns `conversation.view`: tabs from `slots.entries("conversation.view")`, then `renderSlot("conversation.view", { inspectCall, viewRequest, openView, completeViewRequest }, { only: viewId })`, refreshed by `slots.subscribe("conversation.view", refreshViews)` | Rename the slot key in `src/dsh-live-plugin.tsx` + `src/dsh-team-types.d.ts` |
+| `@deepseek-ai/dsh-client-ui-chat` | `conversation.view` entry `id: "chat"`, `order: 0` | Keep our `order` above the host's |
+| `@deepseek-ai/dsh-client-ui-trajectory` | `conversation.view` entry `id: "trajectory"`, `order: 10`; its tab is hidden unless `ctx.configForms.developerTools.enabled` | Same |
+| `@deepseek-ai/dsh-experimental-agent-team` | Publishes the Lead Session `agentTeam` projection | Re-read `src/dsh-live-entry.tsx` status mapping against the new projection shape |
+| `@deepseek-ai/dsh-experimental-client-ui-agent-team` | Official roster UI — injects `conversation.session.header.actions`, **not** `conversation.view` | No conflict; two views may coexist |
+| `@deepseek-ai/dsh-client-modules` | The browser `ModuleLoader` / `ClientModuleRegistry` | Re-check the CJS bundle shape |
+| `@deepseek-ai/dsh-app-boot` | Profile, bundle and patch composition | Re-check `dsh.profile.bundles` ordering |
+
+List slots sort by **`priority` then `order`** (`(a.priority ?? 0) - (b.priority ?? 0) || (a.order ?? 0) - (b.order ?? 0)`); non-list slots sort by `priority` only. Our entry leaves `priority` unset (0) and sets `order: 20`, which puts the `Live Team` tab after `chat` (0) and `trajectory` (10). Host entries use `label: () => t("view.chat")` with `locale: NS`; `resolveSlotLabel` is `typeof label === "function" ? label() : label`, so our plain string `label: 'Live Team'` displays as written — switch to a thunk plus `locale` only if the view becomes translatable.
+
+### Order of operations for a host change
+
+1. **Prefer the patch surface, not the code.** Bundle layers are `cordis.patch.yml` files declared by `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`; the user layer is `~/.dsh/profiles/web/cordis.patch.yml`. Composition order (from `@deepseek-ai/dsh-app-boot`): each bundle's patch lists in `dsh.profile.bundles` order over an empty entry list → the profile's own patches → launcher layers (`--patch` files and flag-derived patches). A profile patch therefore always beats a bundle patch, and `--patch` beats both.
+2. **Never edit `cordis.yml`.** It is generated; the file says `Edit cordis.patch.yml, not this file`.
+3. **Rebuild the affected Web artifacts, then verify the existing URL** at `http://127.0.0.1:3080` after a page refresh. Client-plugin HMR reloads without a refresh **only** while `pnpm run dev:web` is running from the same checkout. The `apps/web` Vite entry is not a standalone app — `dsh web` injects `window.__DSH_BOOT__`; starting another server does not update this GUI.
+4. **Restart the DSH Web process** when the `dsh.client` manifest changes (package metadata, including the negative "not a client package" verdict, is cached per Loader specifier until restart), when a bundle is added to `dsh.profile.bundles`, or when the profile's `node_modules` link changes.
+5. **Never start a replacement server** and never serve this plugin as a second app — it targets the host's client ModuleLoader.
+
+### Wiring the plugin into a profile
+
+- `~/.dsh/profiles/web/package.json` must list `@local/agent-team-visualizer` in `dsh.profile.bundles`, and carry the `link:` dependency `"/Users/nguyenngoctrantien/AI_dsh/Agent-Team-Visualizer/dist-dsh/agent-team-visualizer"`; that link protocol creates `node_modules/@local/agent-team-visualizer -> …/dist-dsh/agent-team-visualizer`.
+- Module resolution is two-anchor: a bundle name resolves first from the DSH installation (the launcher's own package), then from the profile directory; pnpm-managed entries in the profile's `node_modules` resolve first.
+- `dsh plugin --profile web <pnpm args>` forwards to pnpm inside the profile directory (`dsh plugin --profile web add <package>`); `dsh web` is shorthand for `dsh --profile web`; `--patch a.yml --patch b.yml` is repeatable and non-variadic; `dsh --dump-config` / `--dump-default-config` / `--dump-config-schema` take no app args; `dsh rescue --from-default-profile web` builds a rescue profile from the shipped template.
+
+### Manifest rules the host enforces
+
+| Field | Rule (from `dsh-client-modules` / `dsh-app-boot`) |
+| --- | --- |
+| `dsh.client.platform` | must be a string **and** equal `"web"`, otherwise the package is not a client module |
+| `exports["./client"]` | must be a string, or an object with a string `default`; missing → `client bundle not found; run \`pnpm run build\` before launch` |
+| `dsh.client.inject` / `dsh.client.external` | must be string arrays |
+| `dsh.client.immediately` | must be a boolean |
+| `dsh.bundle.patch` | must be one file path or a list of file paths, resolved package-relative and applied in order |
+
+### ModuleLoader semantics (why the bundle is shaped the way it is)
+
+- `window.__ModuleLoader__.load({ id, factory })` only **registers** the factory. The body — including the CSS injection — runs at materialization `factory(require)` → exports, memoized in `ClientModuleLoader.loadCache`. A top-level side effect in the bundle does nothing until the host materializes the module, which is why CSS is injected inside the factory as `<style data-dsh-atv-css>`.
+- `ClientModuleRegistry.rebuilt(id)` — the HMR watch's registration hook — is the **only** entry point through which build changes reach the graph; it compares mtime, ctime and size, so an unchanged artifact is not re-read.
+- The host serves **React 18**; `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client` and the `@deepseek-ai/dsh-client-*` UI packages stay `external` and are `require()`d from the host.
+
+### Reading a boot failure
+
+| Symptom | Cause |
+| --- | --- |
+| `<id>: failed` in the web boot audit | The entry's fiber was disposed — usually `inject` is not an array, so `apply()` runs with an empty `ctx` |
+| `client-modules: <pkg> client bundle not found; run \`pnpm run build\` before launch` | `exports["./client"]` target missing from the linked directory |
+| `client-modules: <pkg> dsh.client.platform must be a string` | Manifest typo in the `dsh.client` block |
+| `client bundles not found` grouped at startup | The linked `dist-dsh/` package was not built before launch |
+
+Startup failure prints `WARNING: Raw diagnostics may contain configuration or credential values from plugin errors.` — scrub raw diagnostics before pasting them anywhere public.
+
+### Do not
+
+- Do not hand-edit minified host `lib/*.js`, and do not patch `~/.dsh/.credentials.yaml`.
+- Do not hand-edit `~/.dsh/profiles/web/cordis.yml`.
+- Do not bump React past major **18**.
+- Do not run a second DSH/GUI server or serve the plugin standalone.
+
 ## Controls (Live Team header)
 
 | Control | Behaviour |
