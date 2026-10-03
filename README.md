@@ -1,52 +1,149 @@
 # Agent Team Visualizer
 
-A local-first dashboard prototype with a live Agent Team view for DSH Web. Its standalone Overview view remains illustrative demo data; the DSH view reads the current `agentTeam` projection and runtime session running states.
+A live 3D office view of an **Agent Team** for [DSH](https://www.npmjs.com/package/@deepseek-ai/dsh) Web, plus a standalone Vite prototype of the same dashboard.
 
-## MVP scope
+The repo ships **two surfaces with two different data contracts**. This distinction is the whole point of the project and the most common source of confusion:
 
-- Team member presence, role, current task, model, branch and progress
-- Interactive 3D office with one desk/chair workstation per member; agents type while working/reviewing and walk around carrying a task card while delivering
-- Demo controls to change member state, select a workstation, orbit and zoom the scene
-- Activity feed with search and category filters
-- Sprint task board and selected-member detail panel
-- Responsive dark operations-console layout
-- Demo interactions for selecting members, filtering activity and showing notices
+| Surface | Data source | Meaning |
+| --- | --- | --- |
+| **`Live Team`** — DSH Web client plugin (`conversation.view` slot) | The active Lead Session's `agentTeam` projection + DSH Session running status | **Real DSH runtime state.** This is the only truthful view. |
+| **Standalone Overview** — `npm run dev` / `vite build` | Hardcoded `initialMembers`, `initialTasks`, `feed` in `src/App.tsx` | **Illustrative demo only.** Never present it as live operational state. |
 
-## Live DSH Web integration
+## The Live Team plugin
 
-The `Live Team` conversation view is registered as a DSH client plugin. It reads the active Lead Session's `agentTeam` projection (roster and shared tasks) and DSH Session runtime running status. It does not invent an activity feed: the current projection API does not publish detailed per-tool/per-message team events. The view is exposed in DSH's conversation-view selector for the current Session.
+`src/dsh-live-plugin.tsx` registers the view into the host's slot registry:
 
-Build the DSH installable bundle:
+```tsx
+export const inject = ['slots']            // must be an array — see below
+
+export function apply(ctx: Context) {
+  ctx.slots.inject('conversation.view', () => ctx.slots.register(
+    { name: 'conversation.view', id: 'agent-team-visualizer', label: 'Live Team', order: 20 },
+    LiveTeamView,
+  ))
+}
+```
+
+`src/dsh-live-entry.tsx` reads data through the host's standard props — nothing is fetched, polled, or simulated:
+
+- `props.useSessions(state => …)` → `state.projectionsBySession[sessionId].values.agentTeam` (`TeamProjection.members` / `tasks` / `failure`)
+- `props.useSessionStatus(state => …)` → `state.get(member.id)?.running`
+- `props.useSession(snapshot => …)` → this session's own snapshot
+
+### Status mapping (the single source of truth)
+
+Every member's displayed status is derived, never authored:
+
+| Condition | Status | Badge label | Task line | Progress |
+| --- | --- | --- | --- | --- |
+| `phase === 'failed'` | `Done` | `DSH lifecycle: failed` | `Agent failed to start` | 100 |
+| `phase === 'provisioning'` | `Idle` | `DSH lifecycle: provisioning` | `Starting agent…` | 0 |
+| `running === true` | `Working` | `DSH runtime: running` | `Agent session is running` | 55 |
+| otherwise | `Idle` | `DSH runtime: inactive` | `Waiting / inactive` | 0 |
+
+`phase` is `TeamMemberProjection.phase`: `'provisioning' | 'active' | 'failed'`.
+
+There is **no invented activity feed, no per-tool events, no fabricated progress**. The Agent Team projection does not publish event-level detail, so the view shows none. A projection error is surfaced verbatim in a `live-warning` banner; a session with no Agent Team renders an explicit empty state.
+
+### Movement rule
+
+```
+canWander = member.phase === 'active' && !isRunning
+```
+
+Only active, non-running agents walk. `Working` agents stay seated at their desk; `provisioning` and `failed` agents stand still at their chair.
+
+## Layout & scene
+
+Workstations are laid out on a grid that adapts to the roster size (`src/dsh-live-entry.tsx`):
+
+```
+spacingX = min(2.65, 10.4 / (columns - 1))
+spacingZ = min(3.1,  7.2 / (rows - 1))
+```
+
+Idle agents orbit a **narrow ellipse in the aisle in front of their own desk** — deliberately not a full-width gather route, which clipped through the desk/chair footprint:
+
+```
+orbitRadiusX = min(0.62, max(0.3,  sceneWidth/2 - 1.25))
+orbitRadiusZ = min(0.34, max(0.2,  sceneDepth/2 - 1.25))
+orbitCenterZ = clamp(z + 1.75, -sceneDepth/2 + 1.25 + rZ, sceneDepth/2 - 0.2 - rZ)
+```
+
+32-second cycle per member, phase-offset by a hash of `member.id`: **orbit 18s → travel 4s → pause at the aisle 6s → return 4s**.
+
+The Memoji bubble (`🙂 😎 🤔 😄 😴`) is **decorative ambient only** — seeded from `member.id` and a 7-second clock slot, never inferred from runtime. Its accessibility label says so: `Decorative ambient expression; not DSH emotion data`.
+
+## File map
+
+| Path | Role |
+| --- | --- |
+| `src/dsh-live-plugin.tsx` | Plugin entry: `inject = ['slots']` + `apply()` slot registration |
+| `src/dsh-live-entry.tsx` | The whole Live Team view: data reading, status mapping, 3D scene, controls |
+| `src/dsh-live.css` | Header/control styling matched to the DSH Live look |
+| `src/office.css` | Name-tag badges and shared scene styling |
+| `src/dsh-team-types.d.ts` | Type-only declarations of the host slot/props shapes (no runtime code) |
+| `scripts/build-dsh-plugin.mjs` | Builds the installable DSH bundle into `dist-dsh/` |
+| `cordis.patch.yml` | Patch manifest declaring the plugin insert |
+| `src/App.tsx`, `src/App.css`, `src/OfficeScene.tsx`, `src/OfficeScene.css` | Standalone **demo** dashboard + its own 3D scene |
+| `src/main.tsx`, `index.html`, `src/index.css` | Standalone Vite entry (`StrictMode` + `createRoot`) |
+| `src/teamData.ts` | Shared `Member` / `MemberStatus` types used by both surfaces |
+
+## Building the DSH plugin
 
 ```sh
 npm install
-npm run build:dsh
+npm run build:dsh     # tsc -b && vite build && node scripts/build-dsh-plugin.mjs
 ```
 
-Install `dist-dsh/agent-team-visualizer` into the DSH `web` profile (it lives outside `dist/` on purpose: the standalone `vite build` empties `dist/` and would otherwise wipe the symlinked package), then restart the existing DSH Web process. The local `dsh` install is linked at `~/.dsh/profiles/web/node_modules/@local/agent-team-visualizer`; rerun `npm run build:dsh` to update those symlinked artifacts before reloading DSH. Changes to the normal `apps/web` shell require rebuilding DSH itself; this plugin targets the host's client ModuleLoader and must not be served as a second app.
+Output lands in **`dist-dsh/agent-team-visualizer/`**, deliberately outside `dist/`: the standalone `vite build` empties `dist/` (`emptyOutDir` defaults to true) and would wipe the symlinked package the web profile points at.
 
-When opened in a Session without an Agent Team projection, the plugin shows an explicit empty state. The standalone Vite Overview remains a demo and must not be interpreted as live runtime data.
+Install the package into the DSH `web` profile (it is linked at `~/.dsh/profiles/web/node_modules/@local/agent-team-visualizer`), then restart the existing DSH Web process. Rerun `npm run build:dsh` to refresh the symlinked artifacts before reloading DSH. Changes to the normal `apps/web` shell require rebuilding DSH itself — this plugin targets the host's client ModuleLoader and must never be served as a second app.
 
-## Out of scope for this prototype
+### Build guardrails (`scripts/build-dsh-plugin.mjs`)
 
-- Detailed event-level activity feed (not currently published by the Agent Team projection)
-- Authentication, persistence, invitations or task mutations
-- Unity/game integration
+The script fails loudly rather than shipping a bundle the host cannot activate:
 
-## Run locally
+- **React major check** — the DSH host serves React 18; a React 19 dependency breaks every hook, so the build throws.
+- **Host module table** — `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `@deepseek-ai/cordis`, `@deepseek-ai/dsh-client-store`, `@deepseek-ai/dsh-client-ui-slots`, `@deepseek-ai/dsh-client-ui-primitives`, `@deepseek-ai/dsh-client-ui-dockkit` stay `external` and are `require()`d from the host. Bundling them would ship a second React whose internals the host cannot reach (`undefined is not an object (evaluating 'Bo.S')` at boot). Everything else (three, react-three-fiber/drei, lucide-react) is bundled in.
+- **CJS shape** — output must contain no ESM `import` and must `require("react")` + `require("react-dom/client")`.
+- **`inject` shape** — cordis's `Inject.resolve()` understands only arrays or plain objects; a function export silently resolves to zero services, `apply()` runs with an empty `ctx`, and the entry's fiber is disposed (`<id>: failed` in the web boot audit). The check reads the authored source because the minifier may alias the export.
+- **CSS registration** — Vite emits `client.css` as a sibling nothing loads, so it is inlined and registered as `<style data-dsh-atv-css>` the way official DSH plugins do.
 
-Requirements: Node.js 20.19+ or 22.12+ (Vite 8).
+## Controls (Live Team header)
+
+| Control | Behaviour |
+| --- | --- |
+| Pause / Resume motion | `aria-pressed` toggle; freezes ambient expression and wander |
+| Zoom in / out | `nextDistance = clamp(current * (in ? 0.82 : 1.22), 7, 22)` |
+| Overview | Reset camera to the full-team framing |
+| Focus workstation | Frame the selected member's **desk**, not the walking avatar |
+
+Exactly one `<OrbitControls>` instance exists (`makeDefault enableRotate enableZoom enablePan minDistance 7 maxDistance 22`). Camera requests animate over 0.35s with a smoothstep ease from a `clone()`-ed start snapshot; a user interaction (`onStart`) or zoom click cancels the transition so manual orbit never fights the animation. `prefers-reduced-motion` defaults to paused, and non-wandering members snap to their chair **before** the pause guard runs.
+
+## Verify after every change
 
 ```sh
-npm install
-npm run dev
+pnpm run build:dsh    # tsc -b && vite build && node scripts/build-dsh-plugin.mjs
+pnpm run lint         # oxlint
+git diff --check      # must be clean
 ```
 
-## Verify production build
+There is **no test runner in this repo** — do not report test results that were not run. Warnings that are expected and non-blocking: `only-export-components` on `src/dsh-live-plugin.tsx`, chunk size above 500 kB, and `lucide-react` "use client" notices for `context.mjs` / `Icon.mjs`.
 
-```sh
-npm run build
-npm run preview
-```
+Performance discipline in `useFrame`: scalar math only, no per-frame object or helper allocation, and the Memoji writes `textContent` only when its phase changes (`lastExpressionPhase` ref).
 
-All displayed data is illustrative. Do not treat it as live operational state.
+## Requirements
+
+Node.js 20.19+ or 22.12+ (Vite 8), TypeScript `~6.0.2`, `oxlint ^1.81.0`. React and React DOM must stay on major **18** to match the DSH host.
+
+## Out of scope
+
+- Event-level activity feed for the live view (not published by the Agent Team projection)
+- Authentication, persistence, invitations, or task mutations
+- Unity / game integration
+
+## Branches
+
+`main`, `feature/3d-office-scene`, `feature/agent-office-movement`, `feature/agent-visualizer-improvements` (current). Open a PR from the current branch at:
+<https://github.com/Tiennguyen25081996/Agent-Team-Visualizer/pull/new/feature/agent-visualizer-improvements>
