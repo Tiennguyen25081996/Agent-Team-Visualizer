@@ -295,17 +295,23 @@ Các file source quan trọng đã được index trong codebase-memory:
 # 1. Add vào package.json của profile web
 cat ~/.dsh/profiles/web/package.json | grep agent-team-visualizer
 
-# 2. Bundle output đã build
-cp /Users/nguyenngoctrantien/AI_dsh/Agent-Team-Visualizer/dist-dsh/agent-team-visualizer \
-   ~/.npm-global/lib/node_modules/@deepseek-ai/dsh/profiles/web/node_modules/@local/agent-team-visualizer
+# 2. Bundle output đã build:
+```bash
+# Từ thư mục project root:
+npm run build:dsh
+ls dist-dsh/agent-team-visualizer/
 
-# 3. Restart DSH để plugin tự động inject
+# Copy vào profile web (hoặc add symlink):
+# ~/.dsh/profiles/web/package.json dependency path: "./dist-dsh/agent-team-visualizer"
+```
+
+# 3. Add vào bundle list và restart DSH Web để plugin inject otomatis
 ```
 
 #### **🎬 Build và Deploy:**
 
 ```bash
-cd /Users/nguyenngoctrantien/AI_dsh/Agent-Team-Visualizer
+# Từ thư mục root của project:
 npm run build:dsh      # Tạo output vào dist-dsh/agent-team-visualizer/
 pnpm run lint          # Chất lượng code (oxlint)
 git diff -- check   # Không commit nếu có lỗi
