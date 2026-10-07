@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Biểu Đồ Luồng Hoạt Động Live Team Plugin</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+        }
+        .diagram {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .title {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .layer {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 15px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .node-group {
+            display: block;
+            margin: 10px 0;
+            padding: 12px;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .file {
+            font-family: 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 5px 0;
+        }
+        .arrow {
+            text-align: center;
+            font-size: 24px;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        .flow-step {
+            display: inline-block;
+            padding: 8px 15px;
+            margin: 5px;
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 10px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="diagram">
+        <div class="title">🔄 LUỒNG CHỌP VÀ HOẠT ĐỘNG LIVE TEAM PLUGIN</div>
+
+        <!-- Layer 1: DSH Host -->
+        <div class="layer">
+            <h3 style="margin-top: 0;">🖥️ DSX WEB HOST</h3>
+            <div class="node-group">
+                <strong>SLOT REGISTRY:</strong><br>
+                └─ conversation.view (slot ID)<br>
+                   ├─ Chat View (order: 0)<br>
+                   ├─ Trajectory View (order: 10)<br>
+                   └─ <span style="color: #e63946; font-weight: bold;">Live Team View (order: 20)</span>
+            </div>
+
+            <div class="node-group">
+                <strong>DANH SÁCH BUNDLES trong package.json:</strong><br>
+                ```bash<br>
+                "dsh": {<br>
+                &nbsp;&nbsp;"profile": {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;"bundles": [<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"@deepseek-ai/dsh-base",<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"@deepseek-ai/dsh-web-app",<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"@local/agent-team-visualizer" ← PLUGIN!<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                &nbsp;&nbsp;}<br>
+                },
+                ```
+            </div>
+        </div>
+
+        <div class="arrow">⬇</div>
+
+        <!-- Layer 2: Plugin Entry -->
+        <div class="layer">
+            <h3 style="margin-top: 0;">🔌 PLUGIN ENTRY (cordis.patch.yml)</h3>
+            
+            <div class="node-group">
+                <strong>File:</strong> `cordis.patch.yml`<br>
+                <div class="file">- insert:<br>
+                  &nbsp;&nbsp;- id: agent-team-visualizer<br>
+                  &nbsp;&nbsp;  name: '@local/agent-team-visualizer'<br>
+                  &nbsp;&nbsp;  label: Live Team</div>
+            </div>
+
+            <div class="node-group">
+                <strong>package.json exports:</strong><br>
+                ```json<br>
+                "exports": {<br>
+                &nbsp;&nbsp;"./client": "./client.js"<br>
+                },<br>
+                "dsh": {<br>
+                &nbsp;&nbsp;"bundle": { "patch": "./cordis.patch.yml" }<br>
+                }<br>
+                ```
+            </div>
+        </div>
+
+        <div class="arrow">⬇</div>
+
+        <!-- Layer 3: dsh-live-plugin -->
+        <div class="layer">
+            <h3 style="margin-top: 0;">🎨 dsh-live-plugin.tsx</h3>
+
+            <div class="node-group">
+                <strong>Code:</strong><br>
+                ```tsx<br>
+                export const inject = ['slots']<br>
+                <br>
+                export function apply(ctx: Context) {<br>
+                &nbsp;&nbsp;ctx.slots.inject('conversation.view', () => ctx.slots.register(<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;{<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;id: 'agent-team-visualizer',<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label: 'Live Team',<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;order: 20,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;} ,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;LiveTeamView,<br>
+                &nbsp;&nbsp;))<br>
+                }<br>
+                ```
+            </div>
+
+            <div style="margin-top: 10px;">
+                <span class="flow-step">Register slot</span><br>
+                <span class="flow-step">Inject vào conversation.view</span>
+            </div>
+        </div>
+
+        <div class="arrow">⬇</div>
+
+        <!-- Layer 4: Main View Component -->
+        <div class="layer">
+            <h3 style="margin-top: 0;">🖼️ src/dsh-live-entry.tsx</h3>
+
+            <div class="node-group">
+                <strong>1. Đọc Dữ Liệu từ Host:</strong><br>
+                ```typescript<br>
+                props.useSessions(state => ...)<br>
+                &nbsp;&nbsp;state.projectionsBySession[sessionId].values.agentTeam<br>
+                state.get(member.id)?.running<br>
+                ```
+            </div>
+
+            <div class="node-group">
+                <strong>2. Map Status:</strong><br>
+                ✅ failed → Done<br>
+                ⏳ provisioning → Idle<br>
+                ▶️ running → Working<br>
+            </div>
+
+            <div class="node-group">
+                <strong>3. Render 3D Scene:</strong><br>
+                └── LiveDesk (grid layout workstations)<br>
+                    ├── Members orbit when idle<br>
+                    └── Working agents stay seated<br>
+                    └── OfficeCameraController (zoom/pan/orbit)
+            </div>
+
+            <div class="node-group">
+                <strong>Callees:</strong><br>
+                └── LiveDesk → OfficeCameraController<br>
+                    ├── requestCamera<br>
+                    └── zoomCamera
+            </div>
+        </div>
+
+        <div class="arrow">⬇</div>
+
+        <!-- Layer 5: Standalone Demo -->
+        <div class="layer">
+            <h3 style="margin-top: 0;">🎭 STANDALONE DEMO (npm run dev)</h3>
+
+            <div class="node-group">
+                <strong>File:</strong> `src/App.tsx`<br>
+                <strong>Purpose:</strong> Illustrative demo với hardcoded data<br>
+                <strong>KHÔNG PHẢI</strong> live runtime state!
+            </div>
+
+            <div class="node-group">
+                <strong>Danh sách file trong standalone:</strong><br>
+                └─ src/App.tsx<br>
+                    └─ src/dsh-live-entry.tsx (main view)<br>
+                        └─ src/OfficeScene.tsx<br>
+                            └─ src/main.tsx<br>
+                                └─ index.html
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <strong>📝 LƯỢNG GIẢI THÍCH:</strong><br>
+            • <span style="color: #e63946;">🔴</span> Live Team View (plugin thực)<br>
+            • ⚪ Demo view (hardcoded data)<br>
+            • ⬇️ Flow từ slot registry → plugin entry → render<br>
+            • 📄 File source code đã index trong codebase-memory<br>
+            • ✅ Plugin được build và link vào profile web<br>
+        </div>
+    </div>
+</body>
+</html>
