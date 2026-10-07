@@ -222,3 +222,119 @@ Node.js 20.19+ or 22.12+ (Vite 8), TypeScript `~6.0.2`, `oxlint ^1.81.0`. React 
 
 `main`, `feature/3d-office-scene`, `feature/agent-office-movement`, `feature/agent-visualizer-improvements` (current). Open a PR from the current branch at:
 <https://github.com/Tiennguyen25081996/Agent-Team-Visualizer/pull/new/feature/agent-visualizer-improvements>
+
+---
+
+## 🌊 **LUỒNG CHỌP VÀ HOẠT ĐỘNG LIVE TEAM PLUGIN**
+
+### 📖 **Biểu đồ trực quan về luồng:**
+
+Hãy mở **[LiveTeam-Diagram.html](file:///Users/nguyenngoctrantien/AI_dsh/LiveTeam-Diagram.html)** trong trình duyệt để xem biểu đồ tương tác!
+
+**Vị trí file:** `/Users/nguyenngoctrantien/AI_dsh/LiveTeam-Diagram.html`
+
+---
+
+### 🎯 **CẤU TRÚC PLUGIN:**
+
+```
+┌───────────────────────────────────────────────────┐
+│  LAYER 1: DSX WEB HOST (conversation.view slot) ─ │
+│    ├─ Chat View (order: 0)                        │
+│    ├─ Trajectory View (order: 10)                 │
+│    └─ Live Team View (order: 20) ⭐ ← PLUGIN!   │
+└───────────────────────────────────────────────────┘
+              ↓
+┌───────────────────────────────────────────────────┐
+│  LAYER 2: cordis.patch.yml (plugin entry point) ─ │
+│    └─ insert: id → name → label                  │
+└───────────────────────────────────────────────────┘
+              ↓
+┌───────────────────────────────────────────────────┐
+│  LAYER 3: src/dsh-live-plugin.tsx                 │
+│    ├─ inject(['slots'])                           │
+│    └─ apply(ctx) → register LiveTeamView         │
+└───────────────────────────────────────────────────┘
+              ↓
+┌───────────────────────────────────────────────────┐
+│  LAYER 4: src/dsh-live-entry.tsx                  │
+│    ├─ Read data từ host props                     │
+│    ├─ Map status (failed→Done, provisioning→Idle) │
+│    └─ Render 3D scene với LiveDesk                │
+└───────────────────────────────────────────────────┘
+              ↓
+┌───────────────────────────────────────────────────┐
+│  LAYER 5: OfficeCameraController (camera controls) │
+└───────────────────────────────────────────────────┘
+```
+
+---
+
+### 📋 **TÀI LIỆU HƯỚNG DẪN:**
+
+Để giúp các thành viên nắm bắt nhanh:
+
+#### **📖 File Biểu Đồ Tương Tác:**
+- **Path:** `/Users/nguyenngoctrantien/AI_dsh/LiveTeam-Diagram.html`
+- **Thao tác:** Mở bằng Chrome/Safari để xem flow trực quan
+- **Nội dung:** Luồng gọi, mapping status, plugin entry point
+
+#### **📄 Code Files Đã Index (Codebase Memory):**
+Các file source quan trọng đã được index trong codebase-memory:
+1. `cordis.patch.yml` - Plugin cài đặt
+2. `package.json` - Manifest settings  
+3. `src/dsh-live-plugin.tsx` - Plugin registration
+4. `src/dsh-live-entry.tsx` - Main view component
+5. `src/OfficeScene.tsx` - 3D scene rendering
+
+#### **🔧 Cài đặt Plugin vào Profile Web:**
+
+Để install plugin Live Team vào DSH profile web:
+
+```bash
+# 1. Add vào package.json của profile web
+cat ~/.dsh/profiles/web/package.json | grep agent-team-visualizer
+
+# 2. Bundle output đã build
+cp /Users/nguyenngoctrantien/AI_dsh/Agent-Team-Visualizer/dist-dsh/agent-team-visualizer \
+   ~/.npm-global/lib/node_modules/@deepseek-ai/dsh/profiles/web/node_modules/@local/agent-team-visualizer
+
+# 3. Restart DSH để plugin tự động inject
+```
+
+#### **🎬 Build và Deploy:**
+
+```bash
+cd /Users/nguyenngoctrantien/AI_dsh/Agent-Team-Visualizer
+npm run build:dsh      # Tạo output vào dist-dsh/agent-team-visualizer/
+pnpm run lint          # Chất lượng code (oxlint)
+git diff -- check   # Không commit nếu có lỗi
+```
+
+#### **👀 Kiểm tra Plugin đã hoạt động:**
+
+1. Mở `<http://127.0.0.1:3080>` trong trình duyệt
+2. Tìm tab **Live Team** sau tab Chat và Trajectory View (order: 20)
+3. Xem các agent chạy trong workspace 3D
+
+---
+
+### ✅ **KHÁC BIỆT PLUGIN VÀ DEMO:**
+
+| Aspect | **Live Team Plugin** 🎯 | Standalone Demo |
+|--------|-------------------------|------------------|
+| Data Source | Agent team projection từ host | Hardcoded demo data |
+| Status Map | Runtime real-status (failed→Done, etc) | Static illustration |
+| Motion | Real-time camera controls | Animation demo only |
+| Mục đích | Production runtime | Demo/prototype test |
+
+---
+
+### 🚀 **Các bước tiếp theo:**
+
+1. ✅ Xem biểu đồ tại `/Users/nguyenngoctrantien/AI_dsh/LiveTeam-Diagram.html`
+2. ✅ Read `cordis.patch.yml` để hiểu plugin entry point
+3. ✅ Kiểm tra bundle trong `dist-dsh/agent-team-visualizer/`
+4. ✅ Install vào profile web và restart DSH Web
+
+**Chúc bạn làm việc hiệu quả!** 🎉

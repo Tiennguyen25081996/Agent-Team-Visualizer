@@ -1,0 +1,12 @@
+{
+    "schema_version": 2,
+    "commit": "8b3c19f59f1fa9e5a547440c28a4b39c85907dcf",
+    "indexed_at": "2026-10-07T04:17:54Z",
+    "project": "Agent-Team-Visualizer",
+    "nodes": 157,
+    "edges": 238,
+    "original_size": 1966080,
+    "compressed_size": 162329,
+    "compression_level": 9,
+    "reconcile_basis": "git-clean-head"
+}
